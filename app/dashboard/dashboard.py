@@ -9,7 +9,7 @@ from datetime import datetime
 sys.path.insert(0, "app")
 from ingestion.scheduler import run_all
 from reports.generator import generate_market_briefing
-from reports.forecast import forecast_ftse100
+from reports.forecast import forecast_ftse100_ma as forecast_ftse100
 from ingestion.sectors import fetch_sector_performance
 
 # ---- Custom Dark Theme ----
@@ -41,7 +41,7 @@ def load_sectors():
 @st.cache_data(ttl=7200)
 def load_forecast():
     try:
-        forecast, model = forecast_ftse100(30)
+        forecast_df, hist_ftse = forecast_ftse100(30)
         return forecast, model
     except Exception as e:
         return None, None
@@ -112,14 +112,13 @@ with tab1:
             st.plotly_chart(fig2, use_container_width=True)
 
 with tab2:
-    st.subheader("FTSE 100 – 30‑Day Forecast (Prophet)")
-    if forecast_df is not None:
+    st.subheader("FTSE 100 � 30-Day Forecast (Moving Average)")
+    if forecast_df is not None and hist_ftse is not None:
         fig_forecast = go.Figure()
-        # Historical data
-        hist_ftse = yf.Ticker("^FTSE").history(period="6mo")
-        fig_forecast.add_trace(go.Scatter(x=hist_ftse.index, y=hist_ftse.Close, name="Historical"))
-        # Forecast
-        fig_forecast.add_trace(go.Scatter(x=forecast_df["ds"], y=forecast_df["yhat"], name="Forecast"))
+        fig_forecast.add_trace(go.Scatter(x=hist_ftse["ds"], y=hist_ftse["y"], name="Historical Close"))
+        fig_forecast.add_trace(go.Scatter(x=hist_ftse["ds"], y=hist_ftse["MA20"], name="MA 20-day"))
+        fig_forecast.add_trace(go.Scatter(x=hist_ftse["ds"], y=hist_ftse["MA50"], name="MA 50-day"))
+        fig_forecast.add_trace(go.Scatter(x=forecast_df["ds"], y=forecast_df["yhat"], name="Forecast", line=dict(dash="dash")))
         fig_forecast.add_trace(go.Scatter(x=forecast_df["ds"], y=forecast_df["yhat_upper"], fill=None, mode="lines", line=dict(color="gray"), name="Upper Bound"))
         fig_forecast.add_trace(go.Scatter(x=forecast_df["ds"], y=forecast_df["yhat_lower"], fill="tonexty", mode="lines", line=dict(color="gray"), name="Lower Bound"))
         fig_forecast.update_layout(template="plotly_dark")
