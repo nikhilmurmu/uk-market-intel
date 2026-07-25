@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
@@ -12,7 +12,6 @@ from reports.generator import generate_market_briefing
 from reports.forecast import forecast_ftse100_ma as forecast_ftse100
 from ingestion.sectors import fetch_sector_performance
 
-# ---- Custom Dark Theme ----
 st.set_page_config(page_title="UK Market Intelligence", layout="wide")
 st.markdown("""
 <style>
@@ -23,7 +22,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ---- Load Data with caching ----
 @st.cache_data(ttl=1800)
 def load_data():
     try:
@@ -41,8 +39,8 @@ def load_sectors():
 @st.cache_data(ttl=7200)
 def load_forecast():
     try:
-        forecast_df, hist_ftse = forecast_ftse100(30)
-        return forecast, model
+        forecast, hist_data = forecast_ftse100(30)
+        return forecast, hist_data
     except Exception as e:
         return None, None
 
@@ -56,17 +54,15 @@ if "error" in data:
 
 market = data.get("market_data", {})
 econ = data.get("economic_indicators", {})
-forecast_df, model = forecast_result if forecast_result else (None, None)
+forecast_df, hist_ftse = forecast_result if forecast_result else (None, None)
 
-# ---- Sidebar ----
-st.sidebar.title("📊 Market Intelligence")
+st.sidebar.title("Market Intelligence")
 st.sidebar.caption(f"Last update: {datetime.now().strftime('%H:%M')}")
-refresh = st.sidebar.button("🔄 Refresh All Data")
+refresh = st.sidebar.button("Refresh All Data")
 if refresh:
     st.cache_data.clear()
     st.rerun()
 
-# ---- KPI Row ----
 ftse100 = market.get("ftse100", {})
 ftse250 = market.get("ftse250", {})
 banks = market.get("banks", [])
@@ -83,11 +79,10 @@ with col4:
     if len(banks) > 1 and "error" not in banks[1]:
         st.metric(banks[1].get("symbol","N/A"), f"{banks[1].get('latest_close','N/A')}p", f"{banks[1].get('change_pct',0):+.2f}%")
 
-# ---- Main Tabs ----
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["📈 Market Overview", "🔮 Forecast", "🏗️ Sectors", "📝 AI Briefing", "📉 Indicators"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["Market Overview", "Forecast", "Sectors", "AI Briefing", "Indicators"])
 
 with tab1:
-    st.subheader("FTSE 100 – 3‑Month Performance")
+    st.subheader("FTSE 100 - 3-Month Performance")
     try:
         import yfinance as yf
         ftse = yf.Ticker("^FTSE")
@@ -103,7 +98,7 @@ with tab1:
         st.warning(f"Historical chart unavailable: {e}")
 
     if banks:
-        st.subheader("UK Bank Stocks – Daily Change")
+        st.subheader("UK Bank Stocks - Daily Change")
         df_banks = pd.DataFrame([b for b in banks if "error" not in b])
         if not df_banks.empty:
             fig2 = px.bar(df_banks, x="symbol", y="change_pct", color="change_pct",
@@ -112,7 +107,7 @@ with tab1:
             st.plotly_chart(fig2, use_container_width=True)
 
 with tab2:
-    st.subheader("FTSE 100 � 30-Day Forecast (Moving Average)")
+    st.subheader("FTSE 100 - 30-Day Forecast (Moving Average)")
     if forecast_df is not None and hist_ftse is not None:
         fig_forecast = go.Figure()
         fig_forecast.add_trace(go.Scatter(x=hist_ftse["ds"], y=hist_ftse["y"], name="Historical Close"))
@@ -127,7 +122,7 @@ with tab2:
         st.warning("Forecast unavailable. Try refreshing later.")
 
 with tab3:
-    st.subheader("UK Sector Performance – Daily Change (%)")
+    st.subheader("UK Sector Performance - Daily Change (%)")
     if sectors:
         df_sectors = pd.DataFrame(list(sectors.items()), columns=["Sector", "Change %"])
         fig3 = px.bar(df_sectors, x="Sector", y="Change %", color="Change %",
@@ -138,7 +133,7 @@ with tab3:
         st.warning("Sector data unavailable. Try refreshing.")
 
 with tab4:
-    st.subheader("AI‑Generated Weekly Market Briefing")
+    st.subheader("AI-Generated Weekly Market Briefing")
     if "briefing" not in st.session_state:
         with st.spinner("Generating briefing..."):
             st.session_state.briefing = generate_market_briefing(data)
