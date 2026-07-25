@@ -1,0 +1,13 @@
+﻿requests
+python-dotenv
+groq
+fastapi
+uvicorn
+prophet
+plotly
+streamlit
+pandas
+numpy
+scikit-learn
+beautifulsoup4
+playwright
