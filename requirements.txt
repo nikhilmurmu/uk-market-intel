@@ -1,13 +1,8 @@
-﻿requests
-python-dotenv
-groq
-fastapi
-uvicorn
+﻿yfinance
 prophet
 plotly
 streamlit
 pandas
-numpy
-scikit-learn
-beautifulsoup4
-playwright
+groq
+python-dotenv
+requests
