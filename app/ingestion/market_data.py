@@ -30,8 +30,11 @@ def fetch_ftse100():
 def fetch_ftse250():
     return _safe_fetch("^FTMC")
 
-def fetch_uk_stock(symbol: str):
-    return _safe_fetch(symbol)
+def fetch_uk_stock(symbol: str) -> dict:
+    """Fetch any UK stock by symbol and include the symbol in the result."""
+    result = _safe_fetch(symbol)
+    result["symbol"] = symbol
+    return result
 
 def fetch_all_market_data() -> dict:
     """Fetch FTSE indices and bank stocks with built-in delays."""
