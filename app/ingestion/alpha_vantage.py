@@ -35,5 +35,10 @@ def fetch_daily_stock(symbol: str = "IBM") -> dict:
         return {"error": str(e)}
 
 def fetch_ftse100_index() -> dict:
-    """Fetch FTSE 100 index."""
-    return fetch_daily_stock("^FTSE")
+    """Fetch FTSE 100 index – try multiple possible symbols."""
+    # Try common symbols
+    for symbol in ["%5EFTSE", "^FTSE", "FTSE"]:
+        result = fetch_daily_stock(symbol)
+        if "error" not in result:
+            return result
+    return {"error": "Could not fetch FTSE 100 index with any symbol"}

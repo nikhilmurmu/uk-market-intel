@@ -4,33 +4,42 @@ import io
 from datetime import datetime
 
 def _parse_ons_csv(url: str, indicator_name: str) -> dict:
-    """Download and parse an ONS CSV file."""
+    """Download and parse any ONS CSV file automatically."""
     try:
         resp = requests.get(url, timeout=20)
         resp.raise_for_status()
         lines = resp.text.splitlines()
+        # Find the first non‑empty line that looks like a header (contains a date or "Title")
         header_idx = None
         for i, line in enumerate(lines):
-            if line.startswith("Title"):
+            if "Title" in line or any(year in line for year in ["2024", "2025", "2026"]):
                 header_idx = i
                 break
         if header_idx is None:
-            return {"error": "Could not find header row"}
+            # Fallback: use the first line after skipping blank lines
+            for i, line in enumerate(lines):
+                if line.strip():
+                    header_idx = i
+                    break
+        if header_idx is None:
+            return {"error": "Could not find any data in CSV"}
         reader = csv.DictReader(io.StringIO("\n".join(lines[header_idx:])))
         rows = list(reader)
         if not rows:
             return {"error": "Empty CSV after header"}
-        headers = [h for h in rows[0].keys() if h != "Title"]
-        for col in reversed(headers):
+        # Remove 'Title' column from consideration
+        cols = [h for h in rows[0].keys() if h.strip().lower() != "title"]
+        # Find the last column with a non‑empty value
+        for col in reversed(cols):
             val = rows[0].get(col, "").strip()
-            if val and val != "":
+            if val and val != "" and val != "N/A":
                 return {
                     "indicator": indicator_name,
                     "latest_month": col.strip(),
                     "latest_value": val,
                     "source_url": url
                 }
-        return {"error": "No data found in columns"}
+        return {"error": "No valid data found in columns"}
     except Exception as e:
         return {"error": str(e)}
 

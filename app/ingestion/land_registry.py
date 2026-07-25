@@ -4,7 +4,7 @@ import io
 from datetime import datetime
 
 def fetch_price_paid_data(postcode_prefix: str = "GU") -> list:
-    """Fetch HM Land Registry Price Paid Data."""
+    """Fetch HM Land Registry Price Paid Data for a given postcode prefix."""
     url = "http://prod.publicdata.landregistry.gov.uk.s3-website-eu-west-1.amazonaws.com/pp-2024.csv"
     try:
         resp = requests.get(url, timeout=30)
@@ -13,6 +13,10 @@ def fetch_price_paid_data(postcode_prefix: str = "GU") -> list:
         data = []
         for row in reader:
             pc = row.get("postcode") or row.get("Postcode") or ""
+            if not pc:
+                # Debug: print available columns once if we can't find the postcode
+                print("Available columns:", list(row.keys()))
+                continue
             if pc.startswith(postcode_prefix):
                 data.append({
                     "price": int(row.get("price") or row.get("price", 0)),
