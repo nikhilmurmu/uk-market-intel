@@ -9,6 +9,7 @@ from datetime import datetime
 sys.path.insert(0, "app")
 from ingestion.scheduler import run_all
 from reports.generator import generate_market_briefing
+from reports.forecast import forecast_ftse100
 from ingestion.sectors import fetch_sector_performance
 
 # ---- Custom Dark Theme ----
@@ -22,7 +23,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ---- Load Data with error handling ----
+# ---- Load Data with caching ----
 @st.cache_data(ttl=1800)
 def load_data():
     try:
@@ -37,8 +38,17 @@ def load_sectors():
     except Exception as e:
         return {}
 
+@st.cache_data(ttl=7200)
+def load_forecast():
+    try:
+        forecast, model = forecast_ftse100(30)
+        return forecast, model
+    except Exception as e:
+        return None, None
+
 data = load_data()
 sectors = load_sectors()
+forecast_result = load_forecast()
 
 if "error" in data:
     st.error(f"Could not load market data: {data['error']}")
@@ -46,6 +56,7 @@ if "error" in data:
 
 market = data.get("market_data", {})
 econ = data.get("economic_indicators", {})
+forecast_df, model = forecast_result if forecast_result else (None, None)
 
 # ---- Sidebar ----
 st.sidebar.title("📊 Market Intelligence")
@@ -73,7 +84,7 @@ with col4:
         st.metric(banks[1].get("symbol","N/A"), f"{banks[1].get('latest_close','N/A')}p", f"{banks[1].get('change_pct',0):+.2f}%")
 
 # ---- Main Tabs ----
-tab1, tab2, tab3, tab4 = st.tabs(["📈 Market Overview", "🏗️ Sector Analysis", "📝 AI Briefing", "📉 Economic Indicators"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📈 Market Overview", "🔮 Forecast", "🏗️ Sectors", "📝 AI Briefing", "📉 Indicators"])
 
 with tab1:
     st.subheader("FTSE 100 – 3‑Month Performance")
@@ -101,10 +112,25 @@ with tab1:
             st.plotly_chart(fig2, use_container_width=True)
 
 with tab2:
+    st.subheader("FTSE 100 – 30‑Day Forecast (Prophet)")
+    if forecast_df is not None:
+        fig_forecast = go.Figure()
+        # Historical data
+        hist_ftse = yf.Ticker("^FTSE").history(period="6mo")
+        fig_forecast.add_trace(go.Scatter(x=hist_ftse.index, y=hist_ftse.Close, name="Historical"))
+        # Forecast
+        fig_forecast.add_trace(go.Scatter(x=forecast_df["ds"], y=forecast_df["yhat"], name="Forecast"))
+        fig_forecast.add_trace(go.Scatter(x=forecast_df["ds"], y=forecast_df["yhat_upper"], fill=None, mode="lines", line=dict(color="gray"), name="Upper Bound"))
+        fig_forecast.add_trace(go.Scatter(x=forecast_df["ds"], y=forecast_df["yhat_lower"], fill="tonexty", mode="lines", line=dict(color="gray"), name="Lower Bound"))
+        fig_forecast.update_layout(template="plotly_dark")
+        st.plotly_chart(fig_forecast, use_container_width=True)
+    else:
+        st.warning("Forecast unavailable. Try refreshing later.")
+
+with tab3:
     st.subheader("UK Sector Performance – Daily Change (%)")
     if sectors:
         df_sectors = pd.DataFrame(list(sectors.items()), columns=["Sector", "Change %"])
-        df_sectors["Color"] = df_sectors["Change %"].apply(lambda x: "green" if x > 0 else "red")
         fig3 = px.bar(df_sectors, x="Sector", y="Change %", color="Change %",
                       color_continuous_scale=["red", "yellow", "green"])
         fig3.update_layout(template="plotly_dark")
@@ -112,14 +138,14 @@ with tab2:
     else:
         st.warning("Sector data unavailable. Try refreshing.")
 
-with tab3:
+with tab4:
     st.subheader("AI‑Generated Weekly Market Briefing")
     if "briefing" not in st.session_state:
         with st.spinner("Generating briefing..."):
             st.session_state.briefing = generate_market_briefing(data)
     st.write(st.session_state.briefing)
 
-with tab4:
+with tab5:
     if econ:
         cols = st.columns(3)
         for i, (key, val) in enumerate(econ.items()):
