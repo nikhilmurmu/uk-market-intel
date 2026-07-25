@@ -21,12 +21,19 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ---- Load Data (cached to avoid repeated API calls) ----
+# ---- Load Data with error handling ----
 @st.cache_data(ttl=3600)
 def load_data():
-    return run_all()
+    try:
+        return run_all()
+    except Exception as e:
+        return {"error": str(e)}
 
 data = load_data()
+if "error" in data:
+    st.error(f"Could not load market data: {data['error']}")
+    st.stop()
+
 market = data.get("market_data", {})
 econ = data.get("economic_indicators", {})
 
@@ -49,34 +56,43 @@ with col1:
 with col2:
     st.metric("FTSE 250", f"{ftse250.get('latest_close', 0):,.1f}", f"{ftse250.get('change_pct', 0):+.2f}%")
 with col3:
-    if banks:
-        st.metric(banks[0]["symbol"], f"{banks[0]['latest_close']}p", f"{banks[0]['change_pct']:+.2f}%")
+    if banks and "error" not in banks[0]:
+        st.metric(banks[0].get("symbol","N/A"), f"{banks[0].get('latest_close','N/A')}p", f"{banks[0].get('change_pct',0):+.2f}%")
 with col4:
-    if len(banks) > 1:
-        st.metric(banks[1]["symbol"], f"{banks[1]['latest_close']}p", f"{banks[1]['change_pct']:+.2f}%")
+    if len(banks) > 1 and "error" not in banks[1]:
+        st.metric(banks[1].get("symbol","N/A"), f"{banks[1].get('latest_close','N/A')}p", f"{banks[1].get('change_pct',0):+.2f}%")
 
 # ---- Main Tabs ----
 tab1, tab2, tab3 = st.tabs(["📈 Market Overview", "📝 AI Briefing", "📉 Economic Indicators"])
 
 with tab1:
-    st.subheader("FTSE Indices – Historical Performance")
-    # Download historical data for a simple line chart
-    ftse100_hist = yf.Ticker("^FTSE").history(period="3mo")
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=ftse100_hist.index, y=ftse100_hist.Close, name="FTSE 100"))
-    st.plotly_chart(fig, use_container_width=True)
+    st.subheader("FTSE 100 – 3‑Month Performance")
+    try:
+        import yfinance as yf
+        ftse = yf.Ticker("^FTSE")
+        hist = ftse.history(period="3mo")
+        if not hist.empty:
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=hist.index, y=hist.Close, name="FTSE 100"))
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.warning("Could not load historical data.")
+    except Exception as e:
+        st.warning(f"Historical chart unavailable: {e}")
 
     if banks:
         st.subheader("UK Bank Stocks – Daily Change")
-        df_banks = pd.DataFrame(banks)
-        fig2 = px.bar(df_banks, x="symbol", y="change_pct", color="change_pct",
-                      color_continuous_scale=["red", "green"])
-        st.plotly_chart(fig2, use_container_width=True)
+        df_banks = pd.DataFrame([b for b in banks if "error" not in b])
+        if not df_banks.empty:
+            fig2 = px.bar(df_banks, x="symbol", y="change_pct", color="change_pct",
+                          color_continuous_scale=["red", "green"])
+            st.plotly_chart(fig2, use_container_width=True)
 
 with tab2:
     st.subheader("AI‑Generated Weekly Market Briefing")
     if "briefing" not in st.session_state:
-        st.session_state.briefing = generate_market_briefing(data)
+        with st.spinner("Generating briefing..."):
+            st.session_state.briefing = generate_market_briefing(data)
     st.write(st.session_state.briefing)
 
 with tab3:
